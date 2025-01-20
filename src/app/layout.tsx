@@ -1,6 +1,9 @@
+import Navbar from "@/components/navbar/Navbar";
+import "@rainbow-me/rainbowkit/styles.css";
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
+import { EVMProvider } from "./providers";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -27,7 +30,10 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
-        {children}
+        <EVMProvider>
+          <Navbar />
+          {children}
+        </EVMProvider>
       </body>
     </html>
   );

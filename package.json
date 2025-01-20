@@ -9,9 +9,14 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@aave/contract-helpers": "^1.30.5",
+    "@bgd-labs/aave-address-book": "^4.8.0",
+    "@lidofinance/lido-ethereum-sdk": "^4.1.0",
     "@radix-ui/react-slider": "^1.2.2",
     "@radix-ui/react-slot": "^1.1.1",
     "@radix-ui/react-tabs": "^1.1.2",
+    "@rainbow-me/rainbowkit": "^2.2.2",
+    "@tanstack/react-query": "^5.64.2",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "lucide-react": "^0.473.0",
@@ -20,7 +25,9 @@
     "react-beautiful-dnd": "^13.1.1",
     "react-dom": "^19.0.0",
     "tailwind-merge": "^2.6.0",
-    "tailwindcss-animate": "^1.0.7"
+    "tailwindcss-animate": "^1.0.7",
+    "viem": "^2.22.10",
+    "wagmi": "^2.14.8"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",

@@ -61,7 +61,7 @@ const BlocksGrid: React.FC = () => {
       </div>
 
       <DragDropContext onDragEnd={handleDragEnd}>
-        <Droppable isDropDisabled={false} droppableId="blocks">
+        <Droppable isCombineEnabled={false} ignoreContainerClipping={false} isDropDisabled={false} droppableId="blocks">
           {(provided) => (
             <div
               {...provided.droppableProps}

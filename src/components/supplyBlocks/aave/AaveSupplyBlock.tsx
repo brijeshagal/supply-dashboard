@@ -1,9 +1,19 @@
+"use client";
+
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Slider } from "@/components/ui/slider";
 import { useToast } from "@/hooks/use-toast";
+import {
+  formatAndTrimUnits,
+  getEllipsisText,
+  trimAndParseUnits,
+} from "@/utils/general/formatter";
+import { viemChainsById } from "@/utils/viem/chains";
 import { X } from "lucide-react";
 import React, { useState } from "react";
+import { parseUnits } from "viem";
+import { useAccount, useBalance } from "wagmi";
 
 interface SupplyBlockProps {
   onRemove: () => void;
@@ -15,25 +25,24 @@ interface ValidationError {
   general?: string;
 }
 
-const AaveSupplyBlock: React.FC<SupplyBlockProps> = ({
-  onRemove,
-  maxAmount = 0.006715403968507,
-}) => {
+const AaveSupplyBlock: React.FC<SupplyBlockProps> = ({ onRemove }) => {
   // State management
+  const { address, chainId: connectedChainId } = useAccount();
+  const chainId = connectedChainId || 42161;
+  const { data } = useBalance();
   const { toast } = useToast();
   const [amount, setAmount] = useState<string>("0.00");
   const [selectedCurrency, setSelectedCurrency] = useState<"Token" | "$">(
     "Token"
   );
-  const [selectedNetwork, setSelectedNetwork] = useState<string>("ETH");
+  const [selectedNetwork, setSelectedNetwork] = useState<string>(
+    viemChainsById[Number(chainId)].nativeCurrency.symbol
+  );
   const [sliderValue, setSliderValue] = useState<number>(0);
   const [errors, setErrors] = useState<ValidationError>({});
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [showConfirmation, setShowConfirmation] = useState<boolean>(false);
-
-  // Derived values
-  const ethPrice = 2475; // Mock ETH price in USD
-  const amountInUsd = parseFloat(amount) * ethPrice;
+  const maxAmount = data?.value || BigInt(0);
   const supplyAPY = 1.88;
 
   // Validation function
@@ -47,7 +56,7 @@ const AaveSupplyBlock: React.FC<SupplyBlockProps> = ({
       errors.amount = "Please enter a valid number";
     } else if (numValue <= 0) {
       errors.amount = "Amount must be greater than 0";
-    } else if (numValue > maxAmount) {
+    } else if (trimAndParseUnits(value, 18) > maxAmount || maxAmount === 0n) {
       errors.amount = "Amount exceeds wallet balance";
     }
 
@@ -63,7 +72,8 @@ const AaveSupplyBlock: React.FC<SupplyBlockProps> = ({
     setErrors(validateAmount(value));
 
     // Update slider value based on amount
-    const percentage = (parseFloat(value) / maxAmount) * 100;
+    const percentage =
+      maxAmount !== 0n ? Number(parseUnits(value, 18) / maxAmount) * 100 : 0;
     setSliderValue(isNaN(percentage) ? 0 : Math.min(percentage, 100));
   };
 
@@ -73,7 +83,10 @@ const AaveSupplyBlock: React.FC<SupplyBlockProps> = ({
     setSliderValue(percentage);
 
     // Calculate new amount based on percentage
-    const newAmount = ((maxAmount * percentage) / 100).toFixed(18);
+    const newAmount = formatAndTrimUnits(
+      (maxAmount * BigInt(percentage)) / BigInt(100),
+      18
+    );
     setAmount(newAmount);
     setErrors(validateAmount(newAmount));
   };
@@ -81,7 +94,10 @@ const AaveSupplyBlock: React.FC<SupplyBlockProps> = ({
   // Quick select percentage buttons
   const handleQuickSelect = (percentage: number) => {
     setSliderValue(percentage);
-    const newAmount = ((maxAmount * percentage) / 100).toFixed(18);
+    const newAmount = formatAndTrimUnits(
+      (maxAmount * BigInt(percentage)) / BigInt(100),
+      18
+    );
     setAmount(newAmount);
     setErrors(validateAmount(newAmount));
   };
@@ -101,7 +117,9 @@ const AaveSupplyBlock: React.FC<SupplyBlockProps> = ({
       setShowConfirmation(true);
       toast({
         title: "Supply Initiated",
-        description: `Supplying ${amount} ETH (≈ $${amountInUsd.toFixed(2)})`,
+        description: `Supplying ${amount} ${
+          viemChainsById[Number(chainId)].nativeCurrency.symbol
+        }`,
       });
     } catch (error) {
       console.log({ error });
@@ -154,12 +172,12 @@ const AaveSupplyBlock: React.FC<SupplyBlockProps> = ({
               })
             }
           >
-            <span>0x6c...ea00</span>
+            <span>{address ? getEllipsisText(address) : ""}</span>
             <span>▼</span>
           </button>
         </div>
         <div className="text-2xl font-semibold text-gray-800">
-          ${(maxAmount * ethPrice).toFixed(2)} ~ {maxAmount}
+          ~{formatAndTrimUnits(maxAmount, 18, 12)}
         </div>
       </div>
 
@@ -207,7 +225,11 @@ const AaveSupplyBlock: React.FC<SupplyBlockProps> = ({
             onChange={(e) => setSelectedNetwork(e.target.value)}
             className="border rounded-lg px-3 py-2"
           >
-            <option value="ETH">ETH</option>
+            <option
+              value={viemChainsById[Number(chainId)].nativeCurrency.symbol}
+            >
+              {viemChainsById[Number(chainId)].nativeCurrency.symbol}
+            </option>
           </select>
         </div>
 
@@ -252,7 +274,7 @@ const AaveSupplyBlock: React.FC<SupplyBlockProps> = ({
           <span className="text-gray-600">Collateralization</span>
           <span className="text-green-500">Enabled</span>
         </div>
-        <div className="flex items-center gap-1 text-gray-500 text-sm">
+        {/* <div className="flex items-center gap-1 text-gray-500 text-sm">
           <span>≈ ${amountInUsd.toFixed(2)}</span>
           <button
             onClick={() =>
@@ -264,7 +286,7 @@ const AaveSupplyBlock: React.FC<SupplyBlockProps> = ({
           >
             <span className="text-gray-400">○</span>
           </button>
-        </div>
+        </div> */}
       </div>
 
       {/* Supply Button */}
