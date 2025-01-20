@@ -1,19 +1,31 @@
 "use client";
 
+import { aavePoolAbi } from "@/artifacts/aave";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Slider } from "@/components/ui/slider";
 import { useToast } from "@/hooks/use-toast";
+import useBalance from "@/hooks/useBalance";
+import { chainIdAaveModuleMap } from "@/utils/aave/contracts";
 import {
   formatAndTrimUnits,
   getEllipsisText,
   trimAndParseUnits,
 } from "@/utils/general/formatter";
 import { viemChainsById } from "@/utils/viem/chains";
+import { AaveV3Arbitrum } from "@bgd-labs/aave-address-book";
 import { X } from "lucide-react";
 import React, { useState } from "react";
-import { parseUnits } from "viem";
-import { useAccount, useBalance } from "wagmi";
+import {
+  createPublicClient,
+  createWalletClient,
+  custom,
+  erc20Abi,
+  http,
+  maxUint160,
+  parseUnits,
+} from "viem";
+import { useAccount } from "wagmi";
 
 interface SupplyBlockProps {
   onRemove: () => void;
@@ -28,9 +40,11 @@ interface ValidationError {
 const AaveSupplyBlock: React.FC<SupplyBlockProps> = ({ onRemove }) => {
   // State management
   const { address, chainId: connectedChainId } = useAccount();
+
   const chainId = connectedChainId || 42161;
-  const { data } = useBalance();
+  const { balance } = useBalance();
   const { toast } = useToast();
+  const [isLoading, setIsLoading] = useState<boolean>(false);
   const [amount, setAmount] = useState<string>("0.00");
   const [selectedCurrency, setSelectedCurrency] = useState<"Token" | "$">(
     "Token"
@@ -40,9 +54,8 @@ const AaveSupplyBlock: React.FC<SupplyBlockProps> = ({ onRemove }) => {
   );
   const [sliderValue, setSliderValue] = useState<number>(0);
   const [errors, setErrors] = useState<ValidationError>({});
-  const [isLoading, setIsLoading] = useState<boolean>(false);
   const [showConfirmation, setShowConfirmation] = useState<boolean>(false);
-  const maxAmount = data?.value || BigInt(0);
+  const maxAmount = balance?.value || BigInt(0);
   const supplyAPY = 1.88;
 
   // Validation function
@@ -109,11 +122,48 @@ const AaveSupplyBlock: React.FC<SupplyBlockProps> = ({ onRemove }) => {
       setErrors(currentErrors);
       return;
     }
-
-    setIsLoading(true);
     try {
+      setIsLoading(true);
       // Simulate API call
-      await new Promise((resolve) => setTimeout(resolve, 1500));
+      if (chainId && address) {
+        const parsedAmount = trimAndParseUnits(amount, 18);
+        const walletClient = createWalletClient({
+          transport: custom(window.ethereum),
+          chain: viemChainsById[chainId],
+          account: address,
+        });
+        const approvalHash = await walletClient.writeContract({
+          abi: erc20Abi,
+          address: "0xaf88d065e77c8cC2239327C5EDb3A432268e5831",
+          functionName: "approve",
+          args: [AaveV3Arbitrum.POOL, maxUint160],
+        });
+
+        const publicClient = createPublicClient({
+          transport: http(),
+          chain: viemChainsById[chainId],
+        });
+        const approvalReceipt = await publicClient.waitForTransactionReceipt({
+          hash: approvalHash,
+        });
+        if (approvalReceipt.status === "success") {
+          const hash = await walletClient.writeContract({
+            abi: aavePoolAbi,
+            address: chainIdAaveModuleMap[chainId].POOL,
+            functionName: "supply",
+            args: [
+              "0xaf88d065e77c8cC2239327C5EDb3A432268e5831",
+              parsedAmount,
+              address,
+              0,
+            ],
+          });
+          const supplyReceipt = await publicClient.waitForTransactionReceipt({
+            hash,
+          });
+          console.log({ supplyReceipt });
+        }
+      }
       setShowConfirmation(true);
       toast({
         title: "Supply Initiated",

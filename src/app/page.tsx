@@ -4,7 +4,7 @@ import SupplyBlock from "@/components/supplyBlocks";
 // BlocksGrid.tsx
 import { Button } from "@/components/ui/button";
 import { Block, BlockType } from "@/types/blocks";
-import React, { useEffect, useState } from "react";
+import React, { useState } from "react";
 import {
   DragDropContext,
   Draggable,
@@ -14,20 +14,10 @@ import {
 
 const BlocksGrid: React.FC = () => {
   // Initialize state from localStorage or default
-  const [blocks, setBlocks] = useState<Block[]>(() => {
-    const saved = localStorage.getItem("blocksLayout");
-    return saved
-      ? JSON.parse(saved)
-      : [
-          { id: "block-2", title: "LIDO", content: "LIDO Block" },
-          { id: "block-3", title: "AAVE", content: "AAVE Block" },
-        ];
-  });
-
-  // Save to localStorage whenever blocks change
-  useEffect(() => {
-    localStorage.setItem("blocksLayout", JSON.stringify(blocks));
-  }, [blocks]);
+  const [blocks, setBlocks] = useState<Block[]>([
+    { id: "block-2", title: "LIDO", content: "LIDO Block" },
+    { id: "block-3", title: "AAVE", content: "AAVE Block" },
+  ]);
 
   const handleDragEnd = (result: DropResult): void => {
     if (!result.destination) return;
@@ -61,7 +51,12 @@ const BlocksGrid: React.FC = () => {
       </div>
 
       <DragDropContext onDragEnd={handleDragEnd}>
-        <Droppable isCombineEnabled={false} ignoreContainerClipping={false} isDropDisabled={false} droppableId="blocks">
+        <Droppable
+          isCombineEnabled={false}
+          ignoreContainerClipping={false}
+          isDropDisabled={false}
+          droppableId="blocks"
+        >
           {(provided) => (
             <div
               {...provided.droppableProps}

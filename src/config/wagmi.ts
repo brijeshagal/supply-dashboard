@@ -5,7 +5,7 @@ import {
   walletConnectWallet,
 } from "@rainbow-me/rainbowkit/wallets";
 import { http } from "viem";
-import { arbitrum, polygon } from "viem/chains";
+import { arbitrum, polygon, sepolia } from "viem/chains";
 import { createConfig } from "wagmi";
 
 const connectors = connectorsForWallets(
@@ -23,7 +23,7 @@ const connectors = connectorsForWallets(
 
 export const getWagmiConfig = () =>
   createConfig({
-    chains: [arbitrum, polygon],
+    chains: [arbitrum, polygon, sepolia],
     connectors,
     transports: {
       [arbitrum.id]: http(
@@ -32,5 +32,6 @@ export const getWagmiConfig = () =>
       [polygon.id]: http(
         `https://polygon-mainnet.g.alchemy.com/v2/${process.env.NEXT_PUBLIC_ALCHEMY_KEY}`
       ),
+      [sepolia.id]: http(),
     },
   });
