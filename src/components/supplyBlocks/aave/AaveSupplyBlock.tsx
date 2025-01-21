@@ -3,16 +3,22 @@
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Slider } from "@/components/ui/slider";
+import { chainIdAaveModuleMap } from "@/constants/aave/supply";
+import { DEFAULT_CHAINID } from "@/constants/chain";
+import { stethTokenDetails } from "@/constants/token/steth";
 import useAaveSupply from "@/hooks/aave/useAaveSupply";
 import { useToast } from "@/hooks/use-toast";
-import useBalance from "@/hooks/useBalance";
+import useToken from "@/hooks/useToken";
+import { TokenDetails } from "@/types/token/details";
+import { ValidationError } from "@/types/validations";
 import {
   formatAndTrimUnits,
   getEllipsisText,
   trimAndParseUnits,
 } from "@/utils/general/formatter";
+import { validateAmount } from "@/utils/validations/input";
 import { X } from "lucide-react";
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Address, parseUnits } from "viem";
 import { useAccount } from "wagmi";
 
@@ -21,53 +27,46 @@ interface SupplyBlockProps {
   maxAmount?: number;
 }
 
-interface ValidationError {
-  amount?: string;
-  general?: string;
-}
-
 const AaveSupplyBlock: React.FC<SupplyBlockProps> = ({ onRemove }) => {
   const { address, chainId: connectedChainId } = useAccount();
   const { approveAndSupply } = useAaveSupply();
+  const { getApprovalAndBalance } = useToken();
 
   // State management
-  const chainId = connectedChainId || 42161;
-  const { balance } = useBalance();
+  const chainId = connectedChainId || DEFAULT_CHAINID;
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [amount, setAmount] = useState<string>("0.00");
+  const [approvedAmount, setApprovedAmount] = useState(0n);
   const [selectedCurrency, setSelectedCurrency] = useState<"Token" | "$">(
     "Token"
   );
-  const [selectedToken] = useState({
-    symbol: "stETH",
-    name: "Staked Ether",
-    decimals: 18,
-    address: "",
-  });
+  const [selectedToken, setSelectedToken] = useState<TokenDetails>(
+    stethTokenDetails[chainId]
+  );
   const [sliderValue, setSliderValue] = useState<number>(0);
   const [errors, setErrors] = useState<ValidationError>({});
-  const maxAmount = balance?.value || BigInt(0);
+  const [maxAmount, setMaxAmount] = useState(0n);
   const supplyAPY = 1.88;
 
-  // Validation function
-  const validateAmount = (value: string): ValidationError => {
-    const errors: ValidationError = {};
-    const numValue = parseFloat(value);
 
-    if (!value || value === "0.00") {
-      errors.amount = "Amount is required";
-    } else if (isNaN(numValue)) {
-      errors.amount = "Please enter a valid number";
-    } else if (numValue <= 0) {
-      errors.amount = "Amount must be greater than 0";
+  useEffect(() => {
+    setSelectedToken(stethTokenDetails[chainId]);
+  }, [chainId]);
+
+  useEffect(() => {
+    async function getTokenApprovalAndBalance() {
+      if (selectedToken.address) {
+        const { approval, balance } = await getApprovalAndBalance(
+          selectedToken.address as Address,
+          chainIdAaveModuleMap[chainId].POOL
+        );
+        setMaxAmount(balance);
+        setApprovedAmount(approval);
+      }
     }
-    // else if (trimAndParseUnits(value, selectedToken.decimals) > maxAmount || maxAmount === 0n) {
-    //   errors.amount = "Amount exceeds wallet balance";
-    // }
-
-    return errors;
-  };
+    getTokenApprovalAndBalance();
+  }, [selectedToken]);
 
   // Handle amount change with validation
   const handleAmountChange = (value: string) => {
@@ -75,7 +74,13 @@ const AaveSupplyBlock: React.FC<SupplyBlockProps> = ({ onRemove }) => {
     if (!/^\d*\.?\d*$/.test(value) && value !== "") return;
 
     setAmount(value);
-    setErrors(validateAmount(value));
+    setErrors(
+      validateAmount({
+        value,
+        maxAmount,
+        decimals: selectedToken.decimals,
+      })
+    );
 
     // Update slider value based on amount
     const percentage =
@@ -96,7 +101,13 @@ const AaveSupplyBlock: React.FC<SupplyBlockProps> = ({ onRemove }) => {
       selectedToken.decimals
     );
     setAmount(newAmount);
-    setErrors(validateAmount(newAmount));
+    setErrors(
+      validateAmount({
+        value: newAmount,
+        maxAmount,
+        decimals: selectedToken.decimals,
+      })
+    );
   };
 
   // Quick select percentage buttons
@@ -107,12 +118,22 @@ const AaveSupplyBlock: React.FC<SupplyBlockProps> = ({ onRemove }) => {
       selectedToken.decimals
     );
     setAmount(newAmount);
-    setErrors(validateAmount(newAmount));
+    setErrors(
+      validateAmount({
+        value: newAmount,
+        maxAmount,
+        decimals: selectedToken.decimals,
+      })
+    );
   };
 
   // Supply function
   const handleSupply = async () => {
-    const currentErrors = validateAmount(amount);
+    const currentErrors = validateAmount({
+      value: amount,
+      maxAmount,
+      decimals: selectedToken.decimals,
+    });
     if (Object.keys(currentErrors).length > 0) {
       setErrors(currentErrors);
       return;
@@ -125,7 +146,7 @@ const AaveSupplyBlock: React.FC<SupplyBlockProps> = ({ onRemove }) => {
         const receipt = await approveAndSupply({
           address,
           amount: parsedAmount,
-          approvalRequired: maxAmount < parsedAmount,
+          approvalRequired: approvedAmount < parsedAmount,
           chainId,
           token: selectedToken.address as Address,
         });
@@ -195,7 +216,7 @@ const AaveSupplyBlock: React.FC<SupplyBlockProps> = ({ onRemove }) => {
           </button>
         </div>
         <div className="text-2xl font-semibold text-gray-800">
-          ~{formatAndTrimUnits(maxAmount, selectedToken.decimals, 12)}
+          ~{formatAndTrimUnits(maxAmount, selectedToken.decimals)}
         </div>
       </div>
 

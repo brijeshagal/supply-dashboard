@@ -6,7 +6,11 @@ export const formatAndTrimUnits = (
   decimals: number,
   units: number = DEFAULT_DECIMAL_TRIM
 ) => {
-  const formattedVal = parseFloat(formatUnits(BigInt(val), decimals));
+  const bigIntVal = BigInt(val);
+  if (bigIntVal === 0n) {
+    return "0";
+  }
+  const formattedVal = parseFloat(formatUnits(bigIntVal, decimals));
   return formattedVal.toFixed(units);
 };
 
