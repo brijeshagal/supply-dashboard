@@ -1,7 +1,6 @@
 "use client";
 
 import SupplyBlock from "@/components/supplyBlocks";
-// BlocksGrid.tsx
 import { Button } from "@/components/ui/button";
 import { Block, BlockType } from "@/types/blocks";
 import React, { useState } from "react";
@@ -13,7 +12,6 @@ import {
 } from "react-beautiful-dnd";
 
 const BlocksGrid: React.FC = () => {
-  // Initialize state from localStorage or default
   const [blocks, setBlocks] = useState<Block[]>([
     { id: "block-2", title: "LIDO", content: "LIDO Block" },
     { id: "block-3", title: "AAVE", content: "AAVE Block" },
