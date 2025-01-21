@@ -32,12 +32,12 @@ const LidoSupplyBlock: React.FC<WithdrawalBlockProps> = ({
   // State management
   const [amount, setAmount] = useState<string>("0.00");
   const [selectedCurrency, setSelectedCurrency] = useState<"ETH" | "$">("ETH");
-  const [selectedToken, setSelectedToken] = useState<string>("stETH");
+  // const [selectedToken, setSelectedToken] = useState<string>("stETH");
   const [errors, setErrors] = useState<ValidationError>({});
   const [isLoading, setIsLoading] = useState<boolean>(false);
-  const [withdrawalMethod, setWithdrawalMethod] = useState<"lido" | "dex">(
-    "lido"
-  );
+  // const [withdrawalMethod, setWithdrawalMethod] = useState<"lido" | "dex">(
+  //   "lido"
+  // );
 
   // Mock withdrawal requests for demo
   const [withdrawalRequests, setWithdrawalRequests] = useState<
