@@ -1,30 +1,19 @@
 "use client";
 
-import { aavePoolAbi } from "@/artifacts/aave";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Slider } from "@/components/ui/slider";
+import useAaveSupply from "@/hooks/aave/useAaveSupply";
 import { useToast } from "@/hooks/use-toast";
 import useBalance from "@/hooks/useBalance";
-import { chainIdAaveModuleMap } from "@/utils/aave/contracts";
 import {
   formatAndTrimUnits,
   getEllipsisText,
   trimAndParseUnits,
 } from "@/utils/general/formatter";
-import { viemChainsById } from "@/utils/viem/chains";
-import { AaveV3Arbitrum } from "@bgd-labs/aave-address-book";
 import { X } from "lucide-react";
 import React, { useState } from "react";
-import {
-  createPublicClient,
-  createWalletClient,
-  custom,
-  erc20Abi,
-  http,
-  maxUint160,
-  parseUnits,
-} from "viem";
+import { Address, parseUnits } from "viem";
 import { useAccount } from "wagmi";
 
 interface SupplyBlockProps {
@@ -38,9 +27,10 @@ interface ValidationError {
 }
 
 const AaveSupplyBlock: React.FC<SupplyBlockProps> = ({ onRemove }) => {
-  // State management
   const { address, chainId: connectedChainId } = useAccount();
+  const { approveAndSupply } = useAaveSupply();
 
+  // State management
   const chainId = connectedChainId || 42161;
   const { balance } = useBalance();
   const { toast } = useToast();
@@ -49,12 +39,14 @@ const AaveSupplyBlock: React.FC<SupplyBlockProps> = ({ onRemove }) => {
   const [selectedCurrency, setSelectedCurrency] = useState<"Token" | "$">(
     "Token"
   );
-  const [selectedNetwork, setSelectedNetwork] = useState<string>(
-    viemChainsById[Number(chainId)].nativeCurrency.symbol
-  );
+  const [selectedToken] = useState({
+    symbol: "stETH",
+    name: "Staked Ether",
+    decimals: 18,
+    address: "",
+  });
   const [sliderValue, setSliderValue] = useState<number>(0);
   const [errors, setErrors] = useState<ValidationError>({});
-  const [showConfirmation, setShowConfirmation] = useState<boolean>(false);
   const maxAmount = balance?.value || BigInt(0);
   const supplyAPY = 1.88;
 
@@ -69,9 +61,10 @@ const AaveSupplyBlock: React.FC<SupplyBlockProps> = ({ onRemove }) => {
       errors.amount = "Please enter a valid number";
     } else if (numValue <= 0) {
       errors.amount = "Amount must be greater than 0";
-    } else if (trimAndParseUnits(value, 18) > maxAmount || maxAmount === 0n) {
-      errors.amount = "Amount exceeds wallet balance";
     }
+    // else if (trimAndParseUnits(value, selectedToken.decimals) > maxAmount || maxAmount === 0n) {
+    //   errors.amount = "Amount exceeds wallet balance";
+    // }
 
     return errors;
   };
@@ -86,7 +79,9 @@ const AaveSupplyBlock: React.FC<SupplyBlockProps> = ({ onRemove }) => {
 
     // Update slider value based on amount
     const percentage =
-      maxAmount !== 0n ? Number(parseUnits(value, 18) / maxAmount) * 100 : 0;
+      maxAmount !== 0n
+        ? Number(parseUnits(value, selectedToken.decimals) / maxAmount) * 100
+        : 0;
     setSliderValue(isNaN(percentage) ? 0 : Math.min(percentage, 100));
   };
 
@@ -98,7 +93,7 @@ const AaveSupplyBlock: React.FC<SupplyBlockProps> = ({ onRemove }) => {
     // Calculate new amount based on percentage
     const newAmount = formatAndTrimUnits(
       (maxAmount * BigInt(percentage)) / BigInt(100),
-      18
+      selectedToken.decimals
     );
     setAmount(newAmount);
     setErrors(validateAmount(newAmount));
@@ -109,7 +104,7 @@ const AaveSupplyBlock: React.FC<SupplyBlockProps> = ({ onRemove }) => {
     setSliderValue(percentage);
     const newAmount = formatAndTrimUnits(
       (maxAmount * BigInt(percentage)) / BigInt(100),
-      18
+      selectedToken.decimals
     );
     setAmount(newAmount);
     setErrors(validateAmount(newAmount));
@@ -126,51 +121,24 @@ const AaveSupplyBlock: React.FC<SupplyBlockProps> = ({ onRemove }) => {
       setIsLoading(true);
       // Simulate API call
       if (chainId && address) {
-        const parsedAmount = trimAndParseUnits(amount, 18);
-        const walletClient = createWalletClient({
-          transport: custom(window.ethereum),
-          chain: viemChainsById[chainId],
-          account: address,
+        const parsedAmount = trimAndParseUnits(amount, selectedToken.decimals);
+        const receipt = await approveAndSupply({
+          address,
+          amount: parsedAmount,
+          approvalRequired: maxAmount < parsedAmount,
+          chainId,
+          token: selectedToken.address as Address,
         });
-        const approvalHash = await walletClient.writeContract({
-          abi: erc20Abi,
-          address: "0xaf88d065e77c8cC2239327C5EDb3A432268e5831",
-          functionName: "approve",
-          args: [AaveV3Arbitrum.POOL, maxUint160],
-        });
-
-        const publicClient = createPublicClient({
-          transport: http(),
-          chain: viemChainsById[chainId],
-        });
-        const approvalReceipt = await publicClient.waitForTransactionReceipt({
-          hash: approvalHash,
-        });
-        if (approvalReceipt.status === "success") {
-          const hash = await walletClient.writeContract({
-            abi: aavePoolAbi,
-            address: chainIdAaveModuleMap[chainId].POOL,
-            functionName: "supply",
-            args: [
-              "0xaf88d065e77c8cC2239327C5EDb3A432268e5831",
-              parsedAmount,
-              address,
-              0,
-            ],
+        if (receipt?.status === "success") {
+          toast({
+            title: "Supply Initiated",
+            description: `Supplying ${amount} ${selectedToken.symbol}`,
           });
-          const supplyReceipt = await publicClient.waitForTransactionReceipt({
-            hash,
-          });
-          console.log({ supplyReceipt });
+        } else {
+          // renders failed toast and error msg
+          throw new Error();
         }
       }
-      setShowConfirmation(true);
-      toast({
-        title: "Supply Initiated",
-        description: `Supplying ${amount} ${
-          viemChainsById[Number(chainId)].nativeCurrency.symbol
-        }`,
-      });
     } catch (error) {
       console.log({ error });
       toast({
@@ -227,7 +195,7 @@ const AaveSupplyBlock: React.FC<SupplyBlockProps> = ({ onRemove }) => {
           </button>
         </div>
         <div className="text-2xl font-semibold text-gray-800">
-          ~{formatAndTrimUnits(maxAmount, 18, 12)}
+          ~{formatAndTrimUnits(maxAmount, selectedToken.decimals, 12)}
         </div>
       </div>
 
@@ -270,17 +238,9 @@ const AaveSupplyBlock: React.FC<SupplyBlockProps> = ({ onRemove }) => {
               $
             </button>
           </div>
-          <select
-            value={selectedNetwork}
-            onChange={(e) => setSelectedNetwork(e.target.value)}
-            className="border rounded-lg px-3 py-2"
-          >
-            <option
-              value={viemChainsById[Number(chainId)].nativeCurrency.symbol}
-            >
-              {viemChainsById[Number(chainId)].nativeCurrency.symbol}
-            </option>
-          </select>
+          <div className="border rounded-lg px-3 py-2">
+            {selectedToken.symbol}
+          </div>
         </div>
 
         {/* Quick Select Buttons */}
